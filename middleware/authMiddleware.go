@@ -10,6 +10,15 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
+// AuthMiddleware is a JWT authentication middleware.
+//
+// It validates the "Authorization" header in the format:
+//   - "Bearer {token}"
+//
+// If the token is valid, it extracts the `user_id` from the claims
+// and stores it in the context for further use in protected routes.
+//
+// If authentication fails, it returns a 401 Unauthorized response.
 func AuthMiddleware() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		authHeader := ctx.GetHeader("Authorization")

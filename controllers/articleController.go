@@ -8,11 +8,15 @@ import (
 	"github.com/jasen-devvv/mini-blog-backend/models"
 )
 
+// ArticleInput defines the structure for article creation and update requests
 type ArticleInput struct {
 	Title   string `json:"title" binding:"required"`
 	Content string `json:"content" binding:"required"`
 }
 
+// GetAllArticles retrieves all articles from the database, ordered by creation date (newest first)
+// and includes the associated user information with the password field removed.
+// Returns a JSON response with the articles or an error message.
 func GetAllArticles(ctx *gin.Context) {
 	var articles []models.Article
 
@@ -21,6 +25,7 @@ func GetAllArticles(ctx *gin.Context) {
 		return
 	}
 
+	// Remove password from user data for security
 	for i := range articles {
 		articles[i].User.Password = ""
 	}
@@ -28,9 +33,12 @@ func GetAllArticles(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, gin.H{"data": articles})
 }
 
+// GetArticle retrieves a single article by its ID, including the associated user information.
+// The password field is removed from the user data for security.
+// Returns a JSON response with the article or a "not found" error.
 func GetArticle(ctx *gin.Context) {
 	id := ctx.Param("id")
-	
+
 	var article models.Article
 
 	if err := config.DB.Preload("User").First(&article, id).Error; err != nil {
@@ -39,27 +47,29 @@ func GetArticle(ctx *gin.Context) {
 	}
 
 	article.User.Password = ""
-	
+
 	ctx.JSON(http.StatusOK, gin.H{"data": article})
 }
 
-// CreateArticle membuat artikel baru
+// CreateArticle creates a new article in the database.
+// Requires authentication, as it uses the user_id from the context (set by auth middleware).
+// Returns a JSON response with the created article (including user info) or an error message.
 func CreateArticle(c *gin.Context) {
 	var input ArticleInput
-	
+
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	// Dapatkan user_id dari context (dari middleware auth)
+	// Get user_id from context (set by auth middleware)
 	userID, exists := c.Get("user_id")
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
 		return
 	}
 
-	// Buat artikel baru
+	// Create new article
 	article := models.Article{
 		Title:   input.Title,
 		Content: input.Content,
@@ -71,34 +81,36 @@ func CreateArticle(c *gin.Context) {
 		return
 	}
 
-	// Load info user untuk respons
+	// Load user info for the response
 	config.DB.Preload("User").First(&article, article.ID)
-	
-	// Hapus password dari respons
+
+	// Remove password from response for security
 	article.User.Password = ""
 
 	c.JSON(http.StatusCreated, gin.H{"data": article})
 }
 
-// UpdateArticle memperbarui artikel
+// UpdateArticle updates an existing article in the database.
+// Requires authentication and verifies that the user is the owner of the article.
+// Returns a JSON response with the updated article or an appropriate error message.
 func UpdateArticle(c *gin.Context) {
 	id := c.Param("id")
-	
-	// Dapatkan user_id dari context (dari middleware auth)
+
+	// Get user_id from context (set by auth middleware)
 	userID, exists := c.Get("user_id")
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
 		return
 	}
 
-	// Periksa apakah artikel ada
+	// Check if article exists
 	var article models.Article
 	if err := config.DB.First(&article, id).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Article not found"})
 		return
 	}
 
-	// Periksa apakah user adalah pemilik artikel
+	// Check if user is the owner of the article
 	if article.UserID != userID.(uint) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "You are not authorized to update this article"})
 		return
@@ -111,7 +123,7 @@ func UpdateArticle(c *gin.Context) {
 		return
 	}
 
-	// Update artikel
+	// Update article
 	if err := config.DB.Model(&article).Updates(models.Article{
 		Title:   input.Title,
 		Content: input.Content,
@@ -120,40 +132,42 @@ func UpdateArticle(c *gin.Context) {
 		return
 	}
 
-	// Load info user untuk respons
+	// Load user info for response
 	config.DB.Preload("User").First(&article, article.ID)
-	
-	// Hapus password dari respons
+
+	// Remove password from response for security
 	article.User.Password = ""
 
 	c.JSON(http.StatusOK, gin.H{"data": article})
 }
 
-// DeleteArticle menghapus artikel
+// DeleteArticle removes an article from the database.
+// Requires authentication and verifies that the user is the owner of the article.
+// Returns a success message or an appropriate error message.
 func DeleteArticle(c *gin.Context) {
 	id := c.Param("id")
-	
-	// Dapatkan user_id dari context (dari middleware auth)
+
+	// Get user_id from context (set by auth middleware)
 	userID, exists := c.Get("user_id")
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
 		return
 	}
 
-	// Periksa apakah artikel ada
+	// Check if article exists
 	var article models.Article
 	if err := config.DB.First(&article, id).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Article not found"})
 		return
 	}
 
-	// Periksa apakah user adalah pemilik artikel
+	// Check if user is the owner of the article
 	if article.UserID != userID.(uint) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "You are not authorized to delete this article"})
 		return
 	}
 
-	// Hapus artikel
+	// Delete article
 	if err := config.DB.Delete(&article).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete article"})
 		return
